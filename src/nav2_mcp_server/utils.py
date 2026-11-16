@@ -21,7 +21,6 @@ and common async/sync operations.
 import functools
 import json
 import logging
-import threading
 from typing import Any, Callable, Dict, Optional, TypeVar
 
 import anyio
@@ -29,6 +28,7 @@ from fastmcp import Context
 
 from .config import get_config
 from .exceptions import Nav2MCPError, ROSError
+from .stop_latch import ROS_LOCK
 
 F = TypeVar('F', bound=Callable[..., Any])
 
@@ -42,7 +42,7 @@ F = TypeVar('F', bound=Callable[..., Any])
 # on the executor and one fails. Serializing all tool calls behind this
 # lock costs throughput we don't have anyway (single-robot, sequential
 # operations) and eliminates the race.
-_ROS_LOCK = threading.Lock()
+_ROS_LOCK = ROS_LOCK
 
 
 class MCPContextManager:

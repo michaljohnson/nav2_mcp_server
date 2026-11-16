@@ -28,6 +28,7 @@ from rclpy.duration import Duration
 
 from .config import get_config
 from .exceptions import create_navigation_error_from_result, NavigationError, NavigationErrorCode
+from .stop_latch import cancel_if_requested, navigation_stopped
 from .utils import MCPContextManager, validate_numeric_range
 
 
@@ -817,6 +818,12 @@ class NavigationManager:
         a fast, actionable failure ("nav2 not active") rather than a
         long hang.
         """
+        if navigation_stopped():
+            raise NavigationError(
+                f'Navigation is stopped; call resume_navigation before {action_name}',
+                NavigationErrorCode.NAVIGATION_CANCELED,
+                {'action': action_name},
+            )
         if not client.wait_for_server(timeout_sec=timeout):
             raise NavigationError(
                 f'Action server for {action_name} not available after '
@@ -838,7 +845,9 @@ class NavigationManager:
             Name of the operation being monitored.
         """
         i = 0
+        stop_sent = False
         while not self.navigator.isTaskComplete():
+            stop_sent = cancel_if_requested(self.navigator, stop_sent)
             i += 1
             feedback = self.navigator.getFeedback()
             update_interval = self.config.navigation.feedback_update_interval
@@ -866,7 +875,9 @@ class NavigationManager:
             Context manager for logging.
         """
         i = 0
+        stop_sent = False
         while not self.navigator.isTaskComplete():
+            stop_sent = cancel_if_requested(self.navigator, stop_sent)
             i += 1
             feedback = self.navigator.getFeedback()
             update_interval = self.config.navigation.feedback_update_interval

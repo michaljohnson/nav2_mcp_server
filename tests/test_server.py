@@ -82,6 +82,7 @@ async def test_server_tool_names(
         'clear_costmaps',
         'get_robot_pose',
         'cancel_navigation',
+        'resume_navigation',
         'nav2_lifecycle',
     ]
 
