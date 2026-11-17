@@ -11,6 +11,8 @@ from unittest.mock import Mock, patch
 import pytest
 from fastmcp import Client, FastMCP
 
+from nav2_mcp_server.stop_latch import STOP_LATCHED, navigation_stopped
+
 
 class TestNavigateToPose:
     """Tests for navigate_to_pose tool."""
@@ -536,16 +538,28 @@ class TestCancelNavigation:
         test_server: FastMCP,
         mock_navigation_manager: Mock
     ) -> None:
-        """Test successful navigation cancellation."""
+        """Test that cancellation latches a stop without touching ROS."""
         mock_get_nav_manager.return_value = mock_navigation_manager
         async with Client(test_server) as client:
-            result = await client.call_tool(
-                'cancel_navigation',
-                {}
-            )
+            try:
+                result = await client.call_tool(
+                    'cancel_navigation',
+                    {}
+                )
 
-            assert result.content
-            mock_navigation_manager.cancel_navigation.assert_called_once()
+                assert 'Navigation stop confirmed' in result.content[0].text
+                assert navigation_stopped()
+                mock_navigation_manager.cancel_navigation.assert_not_called()
+
+                result = await client.call_tool(
+                    'resume_navigation',
+                    {}
+                )
+
+                assert 'Navigation resumed' in result.content[0].text
+                assert not navigation_stopped()
+            finally:
+                STOP_LATCHED.clear()
 
 
 class TestNav2Lifecycle:

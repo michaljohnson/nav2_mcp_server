@@ -461,7 +461,8 @@ def create_mcp_tools(mcp: FastMCP) -> None:
 
     @mcp.tool(
         name='cancel_navigation',
-        description="""Cancel the currently active navigation task.
+        description="""Cancel the currently active navigation task and latch a stop.
+        New goals are refused until resume_navigation. vigil-stop-latch-v2
 
         Example usage:
         - cancel current navigation
@@ -480,6 +481,23 @@ def create_mcp_tools(mcp: FastMCP) -> None:
     ) -> str:
         """Cancel any currently active navigation task."""
         return await anyio.to_thread.run_sync(_cancel_navigation_sync, ctx)
+
+    @mcp.tool(
+        name='resume_navigation',
+        description="""Clear a latched stop so new navigation goals are accepted.
+        vigil-stop-latch-v2""",
+        tags={'resume', 'navigation'},
+        annotations={
+            'title': 'Resume Navigation',
+            'readOnlyHint': False,
+            'openWorldHint': False
+        },
+    )
+    async def resume_navigation(
+        ctx: Annotated[Optional[Context], 'MCP context for logging'] = None,
+    ) -> str:
+        """Clear a latched stop once no navigation work is running."""
+        return await anyio.to_thread.run_sync(_resume_navigation_sync, ctx)
 
     # -------------------------------
     # Lifecycle Management Tools
@@ -617,14 +635,22 @@ def _get_robot_pose_sync(
     return safe_json_dumps(pose_info)
 
 
-@with_context_logging
 def _cancel_navigation_sync(
     ctx: Optional[Context] = None,
     context_manager: Optional[MCPContextManager] = None
 ) -> str:
-    """Cancel navigation synchronously."""
-    nav_manager = get_navigation_manager()
-    return nav_manager.cancel_navigation(context_manager)
+    """Signal cancellation without touching ROS outside its owning worker."""
+    from .stop_latch import request_navigation_stop
+    return request_navigation_stop()
+
+
+def _resume_navigation_sync(
+    ctx: Optional[Context] = None,
+    context_manager: Optional[MCPContextManager] = None
+) -> str:
+    """Clear a latched stop without touching ROS outside its owning worker."""
+    from .stop_latch import resume_navigation
+    return resume_navigation()
 
 
 @with_context_logging
